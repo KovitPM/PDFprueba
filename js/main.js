@@ -1,10 +1,10 @@
 /**
  * FlipBook LABOTEC - Dynamic Google Drive Sync & 3D FlipBook Viewer
- * Optimized for Ultra-Fast Progressive Loading on Vercel
+ * Optimized for Vercel Deployment & Large 70MB+ PDF Streaming
  */
 
 // ⚠️ COLOCA AQUÍ LA URL DE TU GOOGLE APPS SCRIPT (WEB APP):
-const GOOGLE_DRIVE_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyxbp2Ic1Z7DtOOCRabxCqAef8Mf9oIDrHr7AuZI5P3hf4dV30yMMMroYrj7Y2vUGAJ/exec';
+const GOOGLE_DRIVE_ENDPOINT = 'https://script.google.com/macros/library/d/1cTaJ8ZiI2fUr16Gk8WMO4qbyPGepFCZGCLBes8ItDFjp_ca6--Ina2Oc/4';
 
 document.addEventListener('DOMContentLoaded', () => {
     const views = {
@@ -213,10 +213,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Helper: Async Page Canvas Rendering
-    async function renderPageContent(pdf, pageNum, scale = 1.35) {
-        const contentEl = document.getElementById(`page-content-${pageNum}`);
-        if (!contentEl) return;
+    // Async Page Canvas Rendering direct to IMG element
+    async function renderPageContent(pdf, pageNum, scale = 1.25) {
+        const imgEl = document.getElementById(`page-img-${pageNum}`);
+        if (!imgEl) return;
 
         try {
             const page = await pdf.getPage(pageNum);
@@ -228,26 +228,19 @@ document.addEventListener('DOMContentLoaded', () => {
             canvas.height = viewport.height;
 
             await page.render({ canvasContext: ctx, viewport }).promise;
-
-            const img = document.createElement('img');
-            img.src = canvas.toDataURL('image/jpeg', 0.8);
-            img.draggable = false;
-            img.alt = `Página ${pageNum}`;
-
-            contentEl.innerHTML = '';
-            contentEl.appendChild(img);
+            imgEl.src = canvas.toDataURL('image/jpeg', 0.78);
         } catch (e) {
             console.error(`Error renderizando página ${pageNum}:`, e);
         }
     }
 
-    // Ultra-Fast Reader Functionality with Progressive Loading
+    // Ultra-Fast & Memory-Optimized Reader for Large PDFs (70MB+)
     async function openReaderForDocument(item) {
         readerTitle.innerText = item.title || 'Publicación PDF';
         switchView('reader');
 
         readerLoading.classList.remove('hidden');
-        readerLoadingText.innerText = 'Obteniendo documento desde Google Drive...';
+        readerLoadingText.innerText = 'Obteniendo documento desde Google Drive (archivos grandes pueden demorar unos segundos)...';
 
         const wrapper = document.querySelector('.flipbook-wrapper');
         wrapper.innerHTML = '<div id="flipbook" class="flipbook"></div>';
@@ -260,7 +253,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (item.id) {
                 const proxyUrl = `/api/pdf?id=${item.id}`;
                 try {
-                    readerLoadingText.innerText = 'Descargando PDF en segundo plano...';
+                    readerLoadingText.innerText = 'Conectando con el servidor seguro de Vercel...';
                     loadingTask = pdfjsLib.getDocument({
                         url: proxyUrl,
                         cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/',
@@ -269,7 +262,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     await loadingTask.promise;
                 } catch (proxyError) {
-                    console.warn('Proxy Vercel /api/pdf no disponible o falló, probando Google Apps Script base64...', proxyError);
+                    console.warn('Proxy Vercel /api/pdf falló, intentando enlace directo...', proxyError);
                     loadingTask = null;
                 }
             }
@@ -299,9 +292,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
-            // ESTRATEGIA 3: URL directa fallback
+            // ESTRATEGIA 3: Fallback URL directa con confirm=t
             if (!loadingTask) {
-                const targetUrl = item.url || item.pdf;
+                const targetUrl = item.id ? `https://drive.google.com/uc?export=download&confirm=t&id=${item.id}` : (item.url || item.pdf);
                 if (!targetUrl) throw new Error('No se pudo encontrar una fuente válida para el documento PDF.');
 
                 loadingTask = pdfjsLib.getDocument({
@@ -313,35 +306,35 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const pdf = await loadingTask.promise;
             const numPages = pdf.numPages;
-            const renderScale = 1.35;
+            const renderScale = 1.25;
 
-            // 1. Crear inmediatamente la estructura de divs para TODAS las páginas con loaders ligeros
+            // 1. Crear inmediatamente elementos <img> con SVG placeholder para CADA página (Evita error setDensity)
             flipbookEl.innerHTML = '';
             for (let p = 1; p <= numPages; p++) {
                 const pageDiv = document.createElement('div');
                 pageDiv.className = 'page';
+
+                const placeholderSvg = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 450 630'%3E%3Crect width='450' height='630' fill='%23f8fafc'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%2394a3b8' font-family='sans-serif' font-size='16'%3ECargando pág. ${p}...%3C/text%3E%3C/svg%3E`;
+                
                 pageDiv.innerHTML = `
-                    <div class="page-content" id="page-content-${p}">
-                        <div class="page-loader-mini">
-                            <div class="spinner-sm"></div>
-                            <span>Cargando pág. ${p}...</span>
-                        </div>
+                    <div class="page-content">
+                        <img id="page-img-${p}" src="${placeholderSvg}" draggable="false" alt="Página ${p}" />
                     </div>
                 `;
                 flipbookEl.appendChild(pageDiv);
             }
 
-            // 2. Renderizar inmediatamente las 2 primeras páginas (Portada y página 1)
+            // 2. Renderizar inmediatamente la portada y la página 1
             readerLoadingText.innerText = 'Renderizando portada...';
             await renderPageContent(pdf, 1, renderScale);
             if (numPages > 1) {
                 await renderPageContent(pdf, 2, renderScale);
             }
 
-            // 3. ¡OCULTAR EL PANTALLAZO DE CARGA AL INSTANTE! (Abre en ~1 segundo)
+            // 3. Ocultar pantalla de carga inmediatamente
             readerLoading.classList.add('hidden');
 
-            // 4. Inicializar 3D PageFlip inmediatamente con las primeras páginas listas
+            // 4. Inicializar 3D PageFlip (Ahora garantizado sin error de setDensity)
             pageFlip = new St.PageFlip(flipbookEl, {
                 width: 450,
                 height: 630,
@@ -372,12 +365,11 @@ document.addEventListener('DOMContentLoaded', () => {
             btns.prevPage.onclick = () => pageFlip.flipPrev();
             btns.nextPage.onclick = () => pageFlip.flipNext();
 
-            // 5. Cargar en segundo plano (asíncronamente) las páginas restantes (3..N)
+            // 5. Cargar en segundo plano las páginas restantes de forma ligera
             (async () => {
                 for (let p = 3; p <= numPages; p++) {
                     if (!views.reader.classList.contains('active')) break;
                     await renderPageContent(pdf, p, renderScale);
-                    // Pausa de 15ms para no congelar la animación del usuario
                     await new Promise(r => setTimeout(r, 15));
                 }
             })();
@@ -386,7 +378,7 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Reader Error Details:', error);
             readerLoading.classList.add('hidden');
 
-            const detailMsg = error && error.message ? error.message : 'Error desconocido de lectura PDF';
+            const detailMsg = error && error.message ? error.message : 'Error de procesamiento del PDF';
             alert(`Ocurrió un error al abrir el PDF (${detailMsg}).`);
             switchView('library');
         }
