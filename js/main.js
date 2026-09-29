@@ -4,7 +4,7 @@
  */
 
 // ⚠️ COLOCA AQUÍ LA URL DE TU GOOGLE APPS SCRIPT (WEB APP):
-const GOOGLE_DRIVE_ENDPOINT = 'https://script.google.com/macros/library/d/1cTaJ8ZiI2fUr16Gk8WMO4qbyPGepFCZGCLBes8ItDFjp_ca6--Ina2Oc/4';
+const GOOGLE_DRIVE_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyxbp2Ic1Z7DtOOCRabxCqAef8Mf9oIDrHr7AuZI5P3hf4dV30yMMMroYrj7Y2vUGAJ/exec';
 
 document.addEventListener('DOMContentLoaded', () => {
     const views = {
