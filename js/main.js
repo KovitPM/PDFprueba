@@ -3,14 +3,12 @@
  * Optimized for Vercel Deployment
  */
 
-// URL por defecto de tu Google Apps Script (se puede sobrescribir desde el modal de la app o localStorage)
-const DEFAULT_GOOGLE_DRIVE_ENDPOINT = '';
+// ⚠️ COLOCA AQUÍ LA URL DE TU GOOGLE APPS SCRIPT (WEB APP):
+
+
+const GOOGLE_DRIVE_ENDPOINT = 'https://script.google.com/macros/library/d/1cTaJ8ZiI2fUr16Gk8WMO4qbyPGepFCZGCLBes8ItDFjp_ca6--Ina2Oc/4';
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Current active endpoint
-    let currentDriveEndpoint = localStorage.getItem('GOOGLE_DRIVE_ENDPOINT') || DEFAULT_GOOGLE_DRIVE_ENDPOINT;
-
-    // DOM Elements
     const views = {
         library: document.getElementById('library-view'),
         reader: document.getElementById('reader-view')
@@ -21,10 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
         prevPage: document.getElementById('btn-prev'),
         nextPage: document.getElementById('btn-next'),
         fullscreen: document.getElementById('btn-fullscreen'),
-        syncHeader: document.getElementById('btn-sync-header'),
-        openConfig: document.getElementById('btn-open-config'),
-        closeModal: document.getElementById('btn-close-modal'),
-        resetEndpoint: document.getElementById('btn-reset-endpoint')
+        syncHeader: document.getElementById('btn-sync-header')
     };
 
     const searchInput = document.getElementById('search-input');
@@ -34,26 +29,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const readerLoading = document.getElementById('reader-loading');
     const readerLoadingText = document.getElementById('reader-loading-text');
 
-    const modal = document.getElementById('config-modal');
-    const configForm = document.getElementById('config-form');
-    const inputEndpoint = document.getElementById('input-drive-endpoint');
-
     let allPublications = [];
     let pageFlip = null;
 
     init();
 
     function init() {
-        if (inputEndpoint) {
-            inputEndpoint.value = currentDriveEndpoint;
-        }
         setupEventListeners();
         loadLibrary();
     }
 
     function setupEventListeners() {
-        // Navigation & Actions
         btns.backLibrary.onclick = () => switchView('library');
+
         btns.syncHeader.onclick = () => {
             btns.syncHeader.disabled = true;
             btns.syncHeader.style.opacity = '0.7';
@@ -63,49 +51,10 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         };
 
-        // Search Filter
         if (searchInput) {
             searchInput.oninput = (e) => filterPublications(e.target.value);
         }
 
-        // Modal Controls
-        if (btns.openConfig) {
-            btns.openConfig.onclick = () => {
-                inputEndpoint.value = currentDriveEndpoint;
-                modal.classList.remove('hidden');
-            };
-        }
-
-        if (btns.closeModal) {
-            btns.closeModal.onclick = () => modal.classList.add('hidden');
-        }
-
-        window.onclick = (e) => {
-            if (e.target === modal) modal.classList.add('hidden');
-        };
-
-        if (configForm) {
-            configForm.onsubmit = (e) => {
-                e.preventDefault();
-                const newUrl = inputEndpoint.value.trim();
-                currentDriveEndpoint = newUrl;
-                localStorage.setItem('GOOGLE_DRIVE_ENDPOINT', newUrl);
-                modal.classList.add('hidden');
-                loadLibrary();
-            };
-        }
-
-        if (btns.resetEndpoint) {
-            btns.resetEndpoint.onclick = () => {
-                localStorage.removeItem('GOOGLE_DRIVE_ENDPOINT');
-                currentDriveEndpoint = DEFAULT_GOOGLE_DRIVE_ENDPOINT;
-                inputEndpoint.value = currentDriveEndpoint;
-                modal.classList.add('hidden');
-                loadLibrary();
-            };
-        }
-
-        // Fullscreen Toggle
         btns.fullscreen.onclick = () => {
             const wrapper = document.querySelector('.flipbook-wrapper');
             if (!document.fullscreenElement) {
@@ -118,14 +67,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function switchView(viewName) {
         if (viewName !== 'reader' && pageFlip) {
-            try { pageFlip.destroy(); } catch (e) {}
+            try { pageFlip.destroy(); } catch (e) { }
             pageFlip = null;
         }
         Object.values(views).forEach(v => v.classList.remove('active'));
         views[viewName].classList.add('active');
     }
 
-    // Convert Base64 string to Uint8Array
     function base64ToUint8Array(base64) {
         const raw = atob(base64);
         const uint8Array = new Uint8Array(raw.length);
@@ -135,7 +83,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return uint8Array;
     }
 
-    // Load Publications automatically from Google Apps Script Endpoint
     async function loadLibrary() {
         documentsGrid.innerHTML = `
             <div class="loading-docs">
@@ -147,16 +94,14 @@ document.addEventListener('DOMContentLoaded', () => {
         librarySubtitle.innerText = 'Sincronizando catálogo con Google Drive...';
         allPublications = [];
 
-        // Check if endpoint is direct drive folder link instead of Web App
-        if (currentDriveEndpoint.includes('drive.google.com/drive/folders')) {
-            renderConfigWarning('Enlace directo de Google Drive detectado', 'En la configuración colocaste el enlace directo de la carpeta de Google Drive en lugar de la URL de tu Google Apps Script (Web App).');
+        if (GOOGLE_DRIVE_ENDPOINT.includes('drive.google.com/drive/folders')) {
+            renderConfigWarning('Configuración de Google Script requerida', 'En la línea 6 de <code>js/main.js</code> colocaste el enlace directo de la carpeta en lugar de la URL de tu Google Apps Script (Web App).');
             return;
         }
 
-        // 1. Fetch list from Google Apps Script Endpoint
-        if (currentDriveEndpoint && currentDriveEndpoint.includes('script.google.com')) {
+        if (GOOGLE_DRIVE_ENDPOINT && GOOGLE_DRIVE_ENDPOINT.includes('script.google.com')) {
             try {
-                const res = await fetch(currentDriveEndpoint);
+                const res = await fetch(GOOGLE_DRIVE_ENDPOINT);
                 if (res.ok) {
                     const data = await res.json();
                     if (Array.isArray(data)) {
@@ -170,8 +115,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // 2. Fallback to catalogs.json if no endpoint or endpoint returned empty
-        if ((!allPublications || allPublications.length === 0) && !currentDriveEndpoint) {
+        if ((!allPublications || allPublications.length === 0) && !GOOGLE_DRIVE_ENDPOINT) {
             try {
                 const res = await fetch('catalogs.json');
                 if (res.ok) {
@@ -189,12 +133,10 @@ document.addEventListener('DOMContentLoaded', () => {
         librarySubtitle.innerText = 'Configuración requerida';
         documentsGrid.innerHTML = `
             <div style="grid-column: 1/-1; text-align: center; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 16px; padding: 2.5rem 1.5rem; max-width: 680px; margin: 1rem auto; backdrop-filter: blur(12px);">
-                <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">⚙️</div>
+                <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">⚠️</div>
                 <h3 style="color: #f87171; font-size: 1.25rem; font-weight: 700; margin-bottom: 0.75rem;">${title}</h3>
-                <p style="color: #cbd5e1; font-size: 0.95rem; line-height: 1.6; margin-bottom: 1.5rem;">${message}</p>
-                <button class="btn primary" onclick="document.getElementById('btn-open-config').click()">
-                    Configurar Google Drive Ahora
-                </button>
+                <p style="color: #cbd5e1; font-size: 0.95rem; line-height: 1.6;">${message}</p>
+                <p style="font-size: 0.85rem; color: #94a3b8; margin-top: 1rem;">Coloca la URL de tu Web App en la constante <code>GOOGLE_DRIVE_ENDPOINT</code> en el archivo <code>js/main.js</code>.</p>
             </div>
         `;
     }
@@ -207,8 +149,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         if (librarySubtitle) {
-            if (!currentDriveEndpoint && allPublications.length === 0) {
-                librarySubtitle.innerText = 'Configura tu URL de Google Apps Script para comenzar';
+            if (!GOOGLE_DRIVE_ENDPOINT && allPublications.length === 0) {
+                librarySubtitle.innerText = 'Coloca la URL de tu Google Apps Script en js/main.js';
             } else {
                 librarySubtitle.innerText = `${filtered.length} publicación(es) disponible(s) en tiempo real`;
             }
@@ -221,8 +163,8 @@ document.addEventListener('DOMContentLoaded', () => {
         documentsGrid.innerHTML = '';
 
         if (!items || items.length === 0) {
-            if (!currentDriveEndpoint && allPublications.length === 0) {
-                renderConfigWarning('Conecta tu carpeta de Google Drive', 'Presiona el botón "Configurar Drive" en la barra superior y coloca la URL de tu Google Apps Script para listar tus archivos PDF automáticamente.');
+            if (!GOOGLE_DRIVE_ENDPOINT && allPublications.length === 0) {
+                renderConfigWarning('Falta configurar la URL de Google Drive', 'Coloca la URL de tu Google Apps Script en la variable <code>GOOGLE_DRIVE_ENDPOINT</code> en el archivo <code>js/main.js</code>.');
                 return;
             }
 
@@ -239,11 +181,10 @@ document.addEventListener('DOMContentLoaded', () => {
         for (let item of items) {
             const card = document.createElement('div');
             card.className = 'doc-card';
-            
+
             const coverWrapper = document.createElement('div');
             coverWrapper.className = 'doc-cover-wrapper';
 
-            // Default cover state
             coverWrapper.innerHTML = `
                 <div class="doc-cover-placeholder">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
@@ -258,7 +199,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const meta = document.createElement('div');
             meta.className = 'doc-meta';
-            
+
             const dateStr = item.date ? new Date(item.date).toLocaleDateString('es-ES', { year: 'numeric', month: 'short', day: 'numeric' }) : 'PDF Digital';
             meta.innerHTML = `
                 <span>${dateStr}</span>
@@ -287,34 +228,62 @@ document.addEventListener('DOMContentLoaded', () => {
         const flipbookEl = document.getElementById('flipbook');
 
         try {
-            let pdfData = null;
+            let loadingTask = null;
 
-            // Fetch base64 from Google Apps Script Endpoint
-            if (item.id && currentDriveEndpoint && currentDriveEndpoint.includes('script.google.com')) {
-                const fetchUrl = `${currentDriveEndpoint}?id=${item.id}`;
-                const res = await fetch(fetchUrl);
-                const fileData = await res.json();
-                
-                if (fileData.error) throw new Error(fileData.error);
-                if (fileData.base64) {
-                    pdfData = base64ToUint8Array(fileData.base64);
-                } else if (fileData.url) {
-                    pdfData = fileData.url;
+            // ESTRATEGIA 1: Proxy Serverless Vercel (/api/pdf?id=...)
+            if (item.id) {
+                const proxyUrl = `/api/pdf?id=${item.id}`;
+                try {
+                    readerLoadingText.innerText = 'Cargando documento a través del servidor seguro...';
+                    loadingTask = pdfjsLib.getDocument({
+                        url: proxyUrl,
+                        cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/',
+                        cMapPacked: true
+                    });
+
+                    await loadingTask.promise;
+                } catch (proxyError) {
+                    console.warn('Proxy Vercel /api/pdf no disponible o falló, probando Google Apps Script base64...', proxyError);
+                    loadingTask = null;
                 }
-            } else {
-                pdfData = item.url || item.pdf;
             }
 
-            if (!pdfData) throw new Error('No se pudo obtener el archivo PDF desde Google Drive.');
+            // ESTRATEGIA 2: Base64 desde Google Apps Script Endpoint
+            if (!loadingTask && item.id && GOOGLE_DRIVE_ENDPOINT && GOOGLE_DRIVE_ENDPOINT.includes('script.google.com')) {
+                readerLoadingText.innerText = 'Solicitando archivo a Google Apps Script...';
+                const fetchUrl = `${GOOGLE_DRIVE_ENDPOINT}?id=${item.id}`;
+                const res = await fetch(fetchUrl);
+                const fileData = await res.json();
 
-            readerLoadingText.innerText = 'Procesando páginas para el visor 3D...';
+                if (fileData.error) throw new Error(fileData.error);
 
-            const loadingTask = pdfjsLib.getDocument({
-                data: typeof pdfData !== 'string' ? pdfData : undefined,
-                url: typeof pdfData === 'string' ? pdfData : undefined,
-                cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/',
-                cMapPacked: true
-            });
+                if (fileData.base64) {
+                    const pdfData = base64ToUint8Array(fileData.base64);
+                    loadingTask = pdfjsLib.getDocument({
+                        data: pdfData,
+                        cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/',
+                        cMapPacked: true
+                    });
+                } else if (fileData.url) {
+                    loadingTask = pdfjsLib.getDocument({
+                        url: fileData.url,
+                        cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/',
+                        cMapPacked: true
+                    });
+                }
+            }
+
+            // ESTRATEGIA 3: URL directa fallback
+            if (!loadingTask) {
+                const targetUrl = item.url || item.pdf;
+                if (!targetUrl) throw new Error('No se pudo encontrar una fuente válida para el documento PDF.');
+
+                loadingTask = pdfjsLib.getDocument({
+                    url: targetUrl,
+                    cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/',
+                    cMapPacked: true
+                });
+            }
 
             const pdf = await loadingTask.promise;
             const numPages = pdf.numPages;
@@ -345,7 +314,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             readerLoading.classList.add('hidden');
 
-            // Initialize 3D PageFlip
+            // Inicializar 3D PageFlip
             pageFlip = new St.PageFlip(flipbookEl, {
                 width: 450,
                 height: 630,
@@ -362,12 +331,12 @@ document.addEventListener('DOMContentLoaded', () => {
             pageFlip.loadFromHTML(document.querySelectorAll('.page'));
 
             const updatePageIndicator = () => {
-                document.getElementById('page-indicator').innerText = 
+                document.getElementById('page-indicator').innerText =
                     `Página ${pageFlip.getCurrentPageIndex() + 1} de ${pageFlip.getPageCount()}`;
             };
 
             pageFlip.on('flip', (e) => {
-                document.getElementById('page-indicator').innerText = 
+                document.getElementById('page-indicator').innerText =
                     `Página ${e.data + 1} de ${pageFlip.getPageCount()}`;
             });
 
@@ -377,9 +346,11 @@ document.addEventListener('DOMContentLoaded', () => {
             btns.nextPage.onclick = () => pageFlip.flipNext();
 
         } catch (error) {
-            console.error('Reader Error:', error);
+            console.error('Reader Error Details:', error);
             readerLoading.classList.add('hidden');
-            alert('Ocurrió un error al abrir el PDF. Verifica que el archivo esté compartido públicamente en Google Drive.');
+
+            const detailMsg = error && error.message ? error.message : 'Error desconocido de lectura PDF';
+            alert(`Ocurrió un error al abrir el PDF (${detailMsg}).`);
             switchView('library');
         }
     }
