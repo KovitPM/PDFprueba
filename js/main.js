@@ -1,10 +1,10 @@
 /**
  * FlipBook LABOTEC - Dynamic Google Drive Sync & 3D FlipBook Viewer
- * Optimized with IndexedDB Pre-fetching & Instant Local Caching
+ * Optimized with Cover Thumbnails, IndexedDB Pre-fetching & Instant Caching
  */
 
 // ⚠️ COLOCA AQUÍ LA URL DE TU GOOGLE APPS SCRIPT (WEB APP):
-const GOOGLE_DRIVE_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyxbp2Ic1Z7DtOOCRabxCqAef8Mf9oIDrHr7AuZI5P3hf4dV30yMMMroYrj7Y2vUGAJ/exec';
+const GOOGLE_DRIVE_ENDPOINT = 'https://script.google.com/macros/library/d/1cTaJ8ZiI2fUr16Gk8WMO4qbyPGepFCZGCLBes8ItDFjp_ca6--Ina2Oc/4';
 
 // IndexedDB Storage Settings
 const DB_NAME = 'FlipBookCacheDB';
@@ -112,7 +112,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Limpieza automática: borra de IndexedDB cualquier archivo que haya sido eliminado de Drive
     async function cleanUnusedCache(currentDriveItems) {
         try {
             const validIds = new Set(currentDriveItems.map(item => item.id).filter(Boolean));
@@ -135,7 +134,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Pre-carga silenciosa en segundo plano
     async function prefetchItems(items) {
         for (let item of items) {
             if (!item.id) continue;
@@ -162,7 +160,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /* ==========================================================================
-       Library Functions
+       Library Functions & Dynamic Covers
        ========================================================================== */
 
     function switchView(viewName) {
@@ -226,10 +224,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // Ejecutar limpieza de archivos eliminados en Drive
         if (allPublications && allPublications.length > 0) {
             cleanUnusedCache(allPublications);
-            // Iniciar pre-carga en segundo plano después de 1 segundo
             setTimeout(() => prefetchItems(allPublications), 1000);
         }
 
@@ -292,14 +288,30 @@ document.addEventListener('DOMContentLoaded', () => {
             const coverWrapper = document.createElement('div');
             coverWrapper.className = 'doc-cover-wrapper';
 
-            coverWrapper.innerHTML = `
-                <div class="doc-cover-placeholder">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                        <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"></path>
-                    </svg>
-                    <span style="font-size: 0.75rem; font-weight: 500; opacity: 0.7;">Documento PDF</span>
-                </div>
-            `;
+            const coverImg = document.createElement('img');
+            coverImg.className = 'doc-cover';
+            coverImg.alt = item.title || 'Portada';
+            coverImg.loading = 'lazy';
+
+            // 1. Intentar cargar la portada desde Google Drive CDN (Ultra-rápido)
+            if (item.id) {
+                coverImg.src = `https://drive.google.com/thumbnail?id=${item.id}&sz=w500`;
+            }
+
+            // Fallback si la portada directa de Drive falla o no está lista
+            coverImg.onerror = () => {
+                coverWrapper.innerHTML = `
+                    <div class="doc-cover-placeholder">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                            <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"></path>
+                        </svg>
+                        <span style="font-size: 0.75rem; font-weight: 500; opacity: 0.7;">Documento PDF</span>
+                    </div>
+                `;
+                renderCoverWithPDFJS(item, coverWrapper);
+            };
+
+            coverWrapper.appendChild(coverImg);
 
             const title = document.createElement('h3');
             title.innerText = item.title || item.name || 'Publicación';
@@ -317,11 +329,46 @@ document.addEventListener('DOMContentLoaded', () => {
             card.appendChild(title);
             card.appendChild(meta);
 
-            // Pre-cargar al hacer hover sobre la tarjeta para respuesta ultrarrápida
             card.onmouseenter = () => prefetchItems([item]);
-
             card.onclick = () => openReaderForDocument(item);
             documentsGrid.appendChild(card);
+        }
+    }
+
+    // Renderizar portada fallback usando PDF.js
+    async function renderCoverWithPDFJS(item, container) {
+        if (!item.id) return;
+        try {
+            const cached = await getCachedPDF(item.id);
+            let pdf = null;
+
+            if (cached && cached.data) {
+                const loadingTask = pdfjsLib.getDocument({ data: cached.data });
+                pdf = await loadingTask.promise;
+            } else {
+                const proxyUrl = `/api/pdf?id=${item.id}`;
+                const loadingTask = pdfjsLib.getDocument({ url: proxyUrl });
+                pdf = await loadingTask.promise;
+            }
+
+            if (pdf) {
+                const page = await pdf.getPage(1);
+                const viewport = page.getViewport({ scale: 0.4 });
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+
+                await page.render({ canvasContext: ctx, viewport }).promise;
+
+                const img = document.createElement('img');
+                img.className = 'doc-cover';
+                img.src = canvas.toDataURL('image/jpeg', 0.85);
+                container.innerHTML = '';
+                container.appendChild(img);
+            }
+        } catch (e) {
+            console.warn('Fallback portada omitido:', e);
         }
     }
 
@@ -384,7 +431,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         const arrayBuffer = await res.arrayBuffer();
                         const uint8 = new Uint8Array(arrayBuffer);
                         
-                        // Guardar en caché para la próxima vez
                         setCachedPDF(item.id, {
                             data: uint8,
                             lastUpdated: item.lastUpdated || '',
