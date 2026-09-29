@@ -1,0 +1,17 @@
+{
+  "name": "pdf-flipbook-labotec",
+  "version": "1.0.0",
+  "description": "Visor 3D de PDFs sincronizado dinámicamente con Google Drive",
+  "main": "index.html",
+  "scripts": {
+    "start": "npx serve ."
+  },
+  "keywords": [
+    "flipbook",
+    "pdf",
+    "google-drive",
+    "vercel"
+  ],
+  "author": "LABOTEC",
+  "license": "MIT"
+}

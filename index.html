@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FlipBook LABOTEC - Publicaciones Digitales & Google Drive</title>
+    <meta name="description" content="Visor 3D interactivo de publicaciones en PDF sincronizadas en tiempo real con Google Drive.">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Main Style -->
+    <link rel="stylesheet" href="css/style.css">
+    <!-- PDF.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
+    <!-- Page Flip -->
+    <script src="https://cdn.jsdelivr.net/npm/page-flip/dist/js/page-flip.browser.js"></script>
+</head>
+
+<body>
+
+    <header class="header">
+        <div class="logo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round" class="icon">
+                <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"></path>
+                <path d="M6.5 2C4 2 2 4 2 6.5v11C2 20 4 22 6.5 22"></path>
+            </svg>
+            <div>
+                <h1>FlipBook LABOTEC</h1>
+                <span class="live-badge" title="Sincronizado dinámicamente con Google Drive">
+                    <span class="dot"></span> Google Drive Sync
+                </span>
+            </div>
+        </div>
+
+        <div class="header-actions">
+            <button id="btn-sync-header" class="btn secondary" title="Sincronizar ahora con Google Drive">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21.5 2v6h-6M2.5 22v-6h6"></path>
+                    <path d="M2 11.5a10 10 0 0 1 18.8-4.3L21.5 8M22 12.5a10 10 0 0 1-18.8 4.2L2.5 16"></path>
+                </svg>
+                <span>Sincronizar</span>
+            </button>
+
+            <button id="btn-open-config" class="btn secondary" title="Configurar conexión con Google Drive">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                </svg>
+                <span>Configurar Drive</span>
+            </button>
+        </div>
+    </header>
+
+    <main class="container">
+        <!-- Library View -->
+        <section id="library-view" class="view active">
+            <div class="library-header">
+                <div>
+                    <h2>Catálogo de Publicaciones</h2>
+                    <p class="subtitle" id="library-count-subtitle">Cargando publicaciones desde Google Drive...</p>
+                </div>
+
+                <div class="search-box">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="search-icon">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    <input type="text" id="search-input" placeholder="Buscar por título o fecha..." />
+                </div>
+            </div>
+
+            <div id="documents-grid" class="grid-container">
+                <div class="loading-docs">
+                    <div class="spinner"></div>
+                    <p>Obteniendo lista de PDFs desde Google Drive en tiempo real...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Reader View -->
+        <section id="reader-view" class="view">
+            <div class="reader-header">
+                <button id="btn-back-library" class="btn secondary">
+                    ← Volver al Catálogo
+                </button>
+                
+                <h2 id="reader-title">Título del Documento</h2>
+
+                <div class="controls">
+                    <button id="btn-prev" class="btn secondary" title="Página Anterior">◀ Anterior</button>
+                    <span id="page-indicator">Página 1 de ?</span>
+                    <button id="btn-next" class="btn secondary" title="Página Siguiente">Siguiente ▶</button>
+                    <button id="btn-fullscreen" class="btn secondary" title="Pantalla Completa">⛶ Fullscreen</button>
+                </div>
+            </div>
+            
+            <div id="reader-loading" class="reader-loading hidden">
+                <div class="spinner"></div>
+                <p id="reader-loading-text">Cargando y procesando páginas desde Google Drive...</p>
+            </div>
+
+            <div class="flipbook-wrapper">
+                <div id="flipbook" class="flipbook">
+                    <!-- Dynamic PDF 3D pages rendered here -->
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Modal Configuración Google Drive -->
+    <div id="config-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>⚙️ Configuración de Google Drive</h3>
+                <span id="btn-close-modal" class="close-modal">&times;</span>
+            </div>
+            <p class="modal-desc">
+                Copia y pega la URL de la Web App generada con tu <strong>Google Apps Script</strong> para vincular la carpeta de Google Drive a tu sitio en Vercel.
+            </p>
+
+            <form id="config-form">
+                <div class="form-group">
+                    <label for="input-drive-endpoint">URL del Google Apps Script (Web App):</label>
+                    <input type="url" id="input-drive-endpoint" placeholder="https://script.google.com/macros/s/.../exec" required />
+                </div>
+
+                <div class="form-help">
+                    <p>💡 <strong>¿Cómo obtener esta URL?</strong></p>
+                    <ol style="margin-left: 1.2rem; margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-muted); line-height: 1.5;">
+                        <li>Abre <a href="https://script.google.com" target="_blank" style="color: var(--primary);">script.google.com</a> y crea un nuevo script con la plantilla <code>google-apps-script.js</code>.</li>
+                        <li>Coloca el ID de tu carpeta de Google Drive.</li>
+                        <li>Haz clic en <strong>Implementar ➔ Nueva implementación</strong> como Aplicación Web (Acceso: Cualquier persona).</li>
+                        <li>Pega la URL del ejecutable aquí.</li>
+                    </ol>
+                </div>
+
+                <div class="modal-actions" style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem;">
+                    <button type="button" id="btn-reset-endpoint" class="btn secondary">Restablecer por defecto</button>
+                    <button type="submit" class="btn primary">Guardar y Sincronizar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="js/main.js"></script>
+</body>
+
+</html>
