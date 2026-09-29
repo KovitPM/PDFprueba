@@ -1,10 +1,15 @@
 /**
  * FlipBook LABOTEC - Dynamic Google Drive Sync & 3D FlipBook Viewer
- * Optimized for Vercel Deployment & Large 70MB+ PDF Streaming
+ * Optimized with IndexedDB Pre-fetching & Instant Local Caching
  */
 
 // ⚠️ COLOCA AQUÍ LA URL DE TU GOOGLE APPS SCRIPT (WEB APP):
-const GOOGLE_DRIVE_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyxbp2Ic1Z7DtOOCRabxCqAef8Mf9oIDrHr7AuZI5P3hf4dV30yMMMroYrj7Y2vUGAJ/exec';
+const GOOGLE_DRIVE_ENDPOINT = 'https://script.google.com/macros/library/d/1cTaJ8ZiI2fUr16Gk8WMO4qbyPGepFCZGCLBes8ItDFjp_ca6--Ina2Oc/4';
+
+// IndexedDB Storage Settings
+const DB_NAME = 'FlipBookCacheDB';
+const DB_VERSION = 1;
+const STORE_NAME = 'pdf_files';
 
 document.addEventListener('DOMContentLoaded', () => {
     const views = {
@@ -63,6 +68,103 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 
+    /* ==========================================================================
+       IndexedDB Cache System (Instant Loading & Auto Cleanup)
+       ========================================================================== */
+
+    function openCacheDB() {
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open(DB_NAME, DB_VERSION);
+            req.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains(STORE_NAME)) {
+                    db.createObjectStore(STORE_NAME);
+                }
+            };
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+    }
+
+    async function getCachedPDF(id) {
+        try {
+            const db = await openCacheDB();
+            return new Promise((resolve) => {
+                const tx = db.transaction(STORE_NAME, 'readonly');
+                const store = tx.objectStore(STORE_NAME);
+                const req = store.get(id);
+                req.onsuccess = () => resolve(req.result || null);
+                req.onerror = () => resolve(null);
+            });
+        } catch (e) {
+            return null;
+        }
+    }
+
+    async function setCachedPDF(id, dataObject) {
+        try {
+            const db = await openCacheDB();
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            const store = tx.objectStore(STORE_NAME);
+            store.put(dataObject, id);
+        } catch (e) {
+            console.warn('Error guardando en IndexedDB:', e);
+        }
+    }
+
+    // Limpieza automática: borra de IndexedDB cualquier archivo que haya sido eliminado de Drive
+    async function cleanUnusedCache(currentDriveItems) {
+        try {
+            const validIds = new Set(currentDriveItems.map(item => item.id).filter(Boolean));
+            const db = await openCacheDB();
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            const store = tx.objectStore(STORE_NAME);
+            const req = store.getAllKeys();
+
+            req.onsuccess = () => {
+                const keys = req.result || [];
+                keys.forEach(key => {
+                    if (!validIds.has(key)) {
+                        store.delete(key);
+                        console.log(`🧹 Caché eliminada para PDF retirado de Google Drive: ${key}`);
+                    }
+                });
+            };
+        } catch (e) {
+            console.warn('Error en limpieza automática de caché:', e);
+        }
+    }
+
+    // Pre-carga silenciosa en segundo plano
+    async function prefetchItems(items) {
+        for (let item of items) {
+            if (!item.id) continue;
+            const existing = await getCachedPDF(item.id);
+            if (!existing || (item.lastUpdated && existing.lastUpdated !== item.lastUpdated)) {
+                try {
+                    const fetchUrl = `/api/pdf?id=${item.id}`;
+                    const res = await fetch(fetchUrl);
+                    if (res.ok) {
+                        const arrayBuffer = await res.arrayBuffer();
+                        const uint8 = new Uint8Array(arrayBuffer);
+                        await setCachedPDF(item.id, {
+                            data: uint8,
+                            lastUpdated: item.lastUpdated || '',
+                            size: item.size || 0
+                        });
+                        console.log(`⚡ Pre-carga completada para: ${item.title}`);
+                    }
+                } catch (e) {
+                    console.log('Pre-carga silenciosa omitida:', e);
+                }
+            }
+        }
+    }
+
+    /* ==========================================================================
+       Library Functions
+       ========================================================================== */
+
     function switchView(viewName) {
         if (viewName !== 'reader' && pageFlip) {
             try { pageFlip.destroy(); } catch (e) { }
@@ -93,7 +195,7 @@ document.addEventListener('DOMContentLoaded', () => {
         allPublications = [];
 
         if (GOOGLE_DRIVE_ENDPOINT.includes('drive.google.com/drive/folders')) {
-            renderConfigWarning('Configuración de Google Script requerida', 'En la línea 9 de <code>js/main.js</code> colocaste el enlace directo de la carpeta en lugar de la URL de tu Google Apps Script (Web App).');
+            renderConfigWarning('Configuración de Google Script requerida', 'En la línea 7 de <code>js/main.js</code> colocaste el enlace directo de la carpeta en lugar de la URL de tu Google Apps Script (Web App).');
             return;
         }
 
@@ -122,6 +224,13 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (e) {
                 console.log('No local catalogs.json available');
             }
+        }
+
+        // Ejecutar limpieza de archivos eliminados en Drive
+        if (allPublications && allPublications.length > 0) {
+            cleanUnusedCache(allPublications);
+            // Iniciar pre-carga en segundo plano después de 1 segundo
+            setTimeout(() => prefetchItems(allPublications), 1000);
         }
 
         filterPublications(searchInput ? searchInput.value : '');
@@ -208,6 +317,9 @@ document.addEventListener('DOMContentLoaded', () => {
             card.appendChild(title);
             card.appendChild(meta);
 
+            // Pre-cargar al hacer hover sobre la tarjeta para respuesta ultrarrápida
+            card.onmouseenter = () => prefetchItems([item]);
+
             card.onclick = () => openReaderForDocument(item);
             documentsGrid.appendChild(card);
         }
@@ -234,13 +346,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Ultra-Fast & Memory-Optimized Reader for Large PDFs (70MB+)
+    // Instant Reader Functionality with IndexedDB Cache & Pre-fetch
     async function openReaderForDocument(item) {
         readerTitle.innerText = item.title || 'Publicación PDF';
         switchView('reader');
 
         readerLoading.classList.remove('hidden');
-        readerLoadingText.innerText = 'Obteniendo documento desde Google Drive (archivos grandes pueden demorar unos segundos)...';
+        readerLoadingText.innerText = 'Comprobando caché local...';
 
         const wrapper = document.querySelector('.flipbook-wrapper');
         wrapper.innerHTML = '<div id="flipbook" class="flipbook"></div>';
@@ -249,25 +361,49 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             let loadingTask = null;
 
-            // ESTRATEGIA 1: Proxy Serverless Vercel (/api/pdf?id=...)
+            // PASO A: Verificar si el PDF ya está guardado en la memoria local (IndexedDB)
             if (item.id) {
-                const proxyUrl = `/api/pdf?id=${item.id}`;
-                try {
-                    readerLoadingText.innerText = 'Conectando con el servidor seguro de Vercel...';
+                const cached = await getCachedPDF(item.id);
+                if (cached && cached.data) {
+                    readerLoadingText.innerText = '⚡ Abriendo al instante desde memoria local...';
                     loadingTask = pdfjsLib.getDocument({
-                        url: proxyUrl,
+                        data: cached.data,
                         cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/',
                         cMapPacked: true
                     });
+                }
+            }
 
-                    await loadingTask.promise;
+            // PASO B: Si no está en caché, descargar desde el servidor Proxy Vercel (/api/pdf?id=...)
+            if (!loadingTask && item.id) {
+                const proxyUrl = `/api/pdf?id=${item.id}`;
+                try {
+                    readerLoadingText.innerText = 'Descargando archivo desde Google Drive...';
+                    const res = await fetch(proxyUrl);
+                    if (res.ok) {
+                        const arrayBuffer = await res.arrayBuffer();
+                        const uint8 = new Uint8Array(arrayBuffer);
+                        
+                        // Guardar en caché para la próxima vez
+                        setCachedPDF(item.id, {
+                            data: uint8,
+                            lastUpdated: item.lastUpdated || '',
+                            size: item.size || 0
+                        });
+
+                        loadingTask = pdfjsLib.getDocument({
+                            data: uint8,
+                            cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/',
+                            cMapPacked: true
+                        });
+                    }
                 } catch (proxyError) {
-                    console.warn('Proxy Vercel /api/pdf falló, intentando enlace directo...', proxyError);
+                    console.warn('Proxy Vercel falló, intentando Google Script...', proxyError);
                     loadingTask = null;
                 }
             }
 
-            // ESTRATEGIA 2: Base64 desde Google Apps Script Endpoint
+            // PASO C: Fallback a Google Apps Script Base64
             if (!loadingTask && item.id && GOOGLE_DRIVE_ENDPOINT && GOOGLE_DRIVE_ENDPOINT.includes('script.google.com')) {
                 readerLoadingText.innerText = 'Solicitando archivo a Google Apps Script...';
                 const fetchUrl = `${GOOGLE_DRIVE_ENDPOINT}?id=${item.id}`;
@@ -278,21 +414,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (fileData.base64) {
                     const pdfData = base64ToUint8Array(fileData.base64);
+                    setCachedPDF(item.id, { data: pdfData });
                     loadingTask = pdfjsLib.getDocument({
                         data: pdfData,
-                        cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/',
-                        cMapPacked: true
-                    });
-                } else if (fileData.url) {
-                    loadingTask = pdfjsLib.getDocument({
-                        url: fileData.url,
                         cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/',
                         cMapPacked: true
                     });
                 }
             }
 
-            // ESTRATEGIA 3: Fallback URL directa con confirm=t
+            // PASO D: Fallback final a URL directa
             if (!loadingTask) {
                 const targetUrl = item.id ? `https://drive.google.com/uc?export=download&confirm=t&id=${item.id}` : (item.url || item.pdf);
                 if (!targetUrl) throw new Error('No se pudo encontrar una fuente válida para el documento PDF.');
@@ -308,7 +439,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const numPages = pdf.numPages;
             const renderScale = 1.25;
 
-            // 1. Crear inmediatamente elementos <img> con SVG placeholder para CADA página (Evita error setDensity)
+            // 1. Crear inmediatamente estructura <img> con placeholder SVG
             flipbookEl.innerHTML = '';
             for (let p = 1; p <= numPages; p++) {
                 const pageDiv = document.createElement('div');
@@ -334,7 +465,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // 3. Ocultar pantalla de carga inmediatamente
             readerLoading.classList.add('hidden');
 
-            // 4. Inicializar 3D PageFlip (Ahora garantizado sin error de setDensity)
+            // 4. Inicializar 3D PageFlip
             pageFlip = new St.PageFlip(flipbookEl, {
                 width: 450,
                 height: 630,
