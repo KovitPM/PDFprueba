@@ -59,12 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         btns.fullscreen.onclick = () => {
-            const wrapper = document.querySelector('.flipbook-wrapper');
-            if (!document.fullscreenElement) {
-                wrapper.requestFullscreen().catch(err => console.error('Fullscreen error:', err));
-            } else {
-                document.exitFullscreen();
-            }
+            window.open('https://app.evalandgo.com/f/477198/4qsswtSV6VU4zrmmUDPURe', '_blank');
         };
     }
 
